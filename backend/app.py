@@ -1,22 +1,32 @@
 from flask import Flask, request, jsonify
 import os
 from dotenv import load_dotenv
-from google import genai
+import google.generativeai as genai
 from flask_cors import CORS
 from PyPDF2 import PdfReader
-import json
 import re
 
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
 
-# Initialize Gemini client
-client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+# ✅ Proper CORS (important for Vercel)
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+# ✅ Correct Gemini setup
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 # Temporary storage
 resume_text = ""
+
+
+# =========================
+# 🔹 HOME ROUTE (optional but useful)
+# =========================
+@app.route("/")
+def home():
+    return "Backend running 🚀"
 
 
 # =========================
@@ -51,10 +61,8 @@ Give:
 6. Pronunciation Feedback
 """
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
+        # ✅ FIXED Gemini call
+        response = model.generate_content(prompt)
 
         return jsonify({"result": response.text})
 
@@ -71,13 +79,12 @@ def upload_resume():
     global resume_text
 
     try:
-        if "resume" not in request.files:
-            return jsonify({"error": "No file part"}), 400
+        file = request.files.get("resume")
 
-        file = request.files["resume"]
+        if not file:
+            return jsonify({"error": "No file uploaded"}), 400
 
-        if file.filename == "":
-            return jsonify({"error": "No selected file"}), 400
+        print("File received:", file.filename)  # Debug
 
         reader = PdfReader(file)
         text = ""
@@ -127,18 +134,14 @@ Resume:
 {resume_text}
 """
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
+        # ✅ FIXED Gemini call
+        response = model.generate_content(prompt)
 
         raw = response.text.strip()
 
-        # 🔥 Robust parsing (works even if Gemini misbehaves)
+        # Parse safely
         questions = re.split(r'\?\s*', raw)
         questions = [q.strip() + '?' for q in questions if q.strip()]
-
-        # Remove garbage
         questions = [q for q in questions if len(q) > 15]
 
         return jsonify({"questions": questions})
