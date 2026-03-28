@@ -152,5 +152,5 @@ Resume:
 # 🔹 RUN APP
 # =========================
 if __name__ == "__main__":
-    print("API KEY:", os.getenv("GOOGLE_API_KEY"))
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
