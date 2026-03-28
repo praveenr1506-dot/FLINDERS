@@ -551,6 +551,9 @@ body{
 <div class="toast" id="toast"></div>
 
 <script>
+/* ─── BASE URL (🔥 IMPORTANT) ─── */
+const BASE_URL = "https://flinders.onrender.com";
+
 /* ─── GLOBAL STATE ─── */
 let resumeQuestions = [];
 let currentQuestionIndex = 0;
@@ -573,7 +576,7 @@ document.getElementById("getQBtn").addEventListener("click", () => {
   showQuestion(q);
 });
 
-/* ─── SHOW QUESTION UI ─── */
+/* ─── SHOW QUESTION ─── */
 function showQuestion(q) {
   const el = document.getElementById("question");
   el.textContent = q;
@@ -588,7 +591,7 @@ function showQuestion(q) {
   resetBg();
 }
 
-/* ─── RESUME UPLOAD ─── */
+/* ─── UPLOAD RESUME ─── */
 async function uploadResume() {
   const file = document.getElementById("resumeFile").files[0];
 
@@ -603,7 +606,7 @@ async function uploadResume() {
   setStatus("analyzing");
 
   try {
-    const res = await fetch("http://127.0.0.1:5000/upload_resume", {
+    const res = await fetch(`${BASE_URL}/upload_resume`, {
       method: "POST",
       body: formData
     });
@@ -614,7 +617,6 @@ async function uploadResume() {
     if (data.message) {
       toast("✅ Resume uploaded successfully");
 
-      // reset previous questions
       resumeQuestions = [];
       currentQuestionIndex = 0;
 
@@ -628,10 +630,9 @@ async function uploadResume() {
   }
 }
 
-/* ─── GENERATE RESUME QUESTIONS ─── */
+/* ─── GENERATE QUESTIONS ─── */
 async function getResumeQuestions() {
 
-  // If already loaded → show next
   if (resumeQuestions.length > 0) {
     showNextResumeQuestion();
     return;
@@ -640,7 +641,7 @@ async function getResumeQuestions() {
   setStatus("analyzing");
 
   try {
-    const res = await fetch("http://127.0.0.1:5000/generate_questions");
+    const res = await fetch(`${BASE_URL}/generate_questions`);
     const data = await res.json();
 
     setStatus("ready");
@@ -673,7 +674,7 @@ function showNextResumeQuestion() {
   currentQuestionIndex++;
 }
 
-/* ─── SUBMIT ANSWER ─── */
+/* ─── ANALYZE ANSWER ─── */
 async function submitAnswer() {
   const question = document.getElementById("question").innerText;
   const answer = document.getElementById("answer").value.trim();
@@ -690,7 +691,7 @@ async function submitAnswer() {
   setStatus("analyzing");
 
   try {
-    const res = await fetch("http://127.0.0.1:5000/analyze", {
+    const res = await fetch(`${BASE_URL}/analyze`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ question, answer })
@@ -728,7 +729,6 @@ function resetAll() {
   document.getElementById("resultBlock").classList.remove("show");
   document.getElementById("loadingBlock").classList.remove("show");
 
-  // reset resume state
   resumeQuestions = [];
   currentQuestionIndex = 0;
 
