@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Interview Coach</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+/* ── Reset ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+/* ── Tokens ── */
+:root{
+  --bg:       #080c14;
+  --surface:  #0d1321;
+  --surface2: #111827;
+  --glass:    rgba(255,255,255,0.03);
+  --border:   rgba(255,255,255,0.07);
+  --border2:  rgba(255,255,255,0.12);
+  --text:     #e2e8f4;
+  --muted:    #4a5568;
+  --muted2:   #64748b;
+  --cyan:     #22d3ee;
+  --cyan-dim: rgba(34,211,238,0.12);
+  --white:    #ffffff;
+  --r:        16px;
+  --r-sm:     10px;
+  --transition-bg: background 1.4s cubic-bezier(0.4,0,0.2,1),
+                   --bg-glow  1.4s cubic-bezier(0.4,0,0.2,1);
+  --bg-glow:  34,211,238; /* default cyan rgb */
+}
+
+html{ scroll-behavior:smooth; }
+
+body{
+  font-family:'Manrope',sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height:100vh;
+  overflow-x:hidden;
+  transition: background 1.4s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* ── Animated mesh background ── */
+.bg-mesh{
+  position:fixed;inset:0;z-index:0;
+  overflow:hidden;pointer-events:none;
+}
+.glow-orb{
+  position:absolute;border-radius:50%;
+  filter:blur(120px);opacity:0;
+  transition:opacity 1.4s ease, background 1.4s ease, transform 1.4s ease;
+}
+.glow-orb.a{
+  width:600px;height:600px;
+  top:-200px;left:-150px;
+  background:rgba(34,211,238,0.07);
+  animation:orbA 20s ease-in-out infinite alternate;
+}
+.glow-orb.b{
+  width:500px;height:500px;
+  bottom:-150px;right:-100px;
+  background:rgba(34,211,238,0.05);
+  animation:orbB 24s ease-in-out infinite alternate;
+}
+/* Score glows injected via JS */
+.glow-orb.score-glow{
+  width:800px;height:800px;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  opacity:0;
+}
+@keyframes orbA{from{transform:translate(0,0)}to{transform:translate(60px,40px)}}
+@keyframes orbB{from{transform:translate(0,0)}to{transform:translate(-40px,-60px)}}
+
+/* ── Scanline overlay ── */
+.scanlines{
+  position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+}
+
+/* ── Layout ── */
+.shell{
+  position:relative;z-index:2;
+  max-width:760px;margin:0 auto;
+  padding:48px 24px 100px;
+}
+
+/* ── Header ── */
+.header{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:52px;
+  animation:fadeUp .7s ease both;
+}
+.logo{
+  display:flex;flex-direction:column;gap:2px;
+}
+.logo-mark{
+  font-family:'Space Mono',monospace;
+  font-size:26px;font-weight:700;letter-spacing:-1px;
+  color:var(--white);
+  line-height:1;
+}
+.logo-mark span{color:var(--cyan);}
+.logo-sub{
+  font-size:10px;letter-spacing:3px;text-transform:uppercase;
+  color:var(--muted2);font-weight:500;
+}
+.status-chip{
+  display:flex;align-items:center;gap:8px;
+  background:var(--glass);
+  border:1px solid var(--border);
+  padding:8px 16px;border-radius:40px;
+  font-family:'Space Mono',monospace;
+  font-size:10px;letter-spacing:1px;text-transform:uppercase;
+  color:var(--muted2);
+  transition:all .4s;
+}
+.status-chip.recording{
+  border-color:rgba(239,68,68,0.4);
+  color:#f87171;
+  background:rgba(239,68,68,0.07);
+}
+.status-chip.analyzing{
+  border-color:rgba(34,211,238,0.4);
+  color:var(--cyan);
+  background:var(--cyan-dim);
+}
+.blink{width:6px;height:6px;border-radius:50%;background:currentColor;}
+.blink.pulse{animation:blink 1s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+
+/* ── Step labels ── */
+.step-label{
+  font-family:'Space Mono',monospace;
+  font-size:10px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted);
+  margin-bottom:10px;
+  display:flex;align-items:center;gap:10px;
+}
+.step-label::before{
+  content:attr(data-n);
+  width:20px;height:20px;border-radius:50%;
+  background:var(--glass);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;color:var(--muted2);flex-shrink:0;
+}
+.step-label::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* ── Question card ── */
+.q-section{margin-bottom:28px;animation:fadeUp .7s .1s ease both;}
+.q-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  padding:28px 30px 22px;
+  position:relative;overflow:hidden;
+  transition:border-color .3s;
+}
+.q-card::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(34,211,238,0.03),transparent 60%);
+  pointer-events:none;
+}
+.q-card.loaded{border-color:rgba(34,211,238,0.2);}
+.q-tag{
+  font-family:'Space Mono',monospace;
+  font-size:10px;color:var(--cyan);letter-spacing:1px;
+  margin-bottom:12px;opacity:0.7;
+}
+.q-text{
+  font-size:18px;font-weight:700;line-height:1.5;
+  color:var(--white);min-height:28px;
+  transition:opacity .3s;
+}
+.q-text.placeholder{font-weight:300;font-size:15px;color:var(--muted2);font-style:italic;}
+.q-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;}
+
+/* ── Buttons ── */
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:10px 20px;border-radius:40px;border:none;
+  font-family:'Manrope',sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:.5px;text-transform:uppercase;
+  cursor:pointer;transition:all .2s;white-space:nowrap;
+}
+.btn-cyan{
+  background:var(--cyan);color:#000;
+  box-shadow:0 0 20px rgba(34,211,238,0.25);
+}
+.btn-cyan:hover{transform:translateY(-1px);box-shadow:0 0 32px rgba(34,211,238,0.4);}
+.btn-ghost{
+  background:var(--glass);color:var(--muted2);
+  border:1px solid var(--border);
+}
+.btn-ghost:hover{border-color:var(--border2);color:var(--text);}
+.btn-danger{
+  background:rgba(239,68,68,0.1);color:#f87171;
+  border:1px solid rgba(239,68,68,0.2);
+}
+.btn-danger:hover{background:rgba(239,68,68,0.18);}
+.btn:disabled{opacity:.35;cursor:not-allowed;transform:none!important;box-shadow:none!important;}
+
+/* ── Answer section ── */
+.a-section{margin-bottom:20px;animation:fadeUp .7s .2s ease both;}
+.a-box{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  overflow:hidden;
+  transition:border-color .2s,box-shadow .2s;
+}
+.a-box:focus-within{
+  border-color:rgba(34,211,238,0.3);
+  box-shadow:0 0 0 3px rgba(34,211,238,0.06);
+}
+#answer{
+  width:100%;background:transparent;border:none;outline:none;
+  padding:20px 22px;resize:vertical;min-height:130px;
+  font-family:'Manrope',sans-serif;font-size:15px;font-weight:400;
+  line-height:1.7;color:var(--text);
+}
+#answer::placeholder{color:var(--muted);}
+.a-toolbar{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  border-top:1px solid var(--border);
+  background:rgba(0,0,0,0.2);flex-wrap:wrap;
+}
+.mic-ring{
+  width:40px;height:40px;border-radius:50%;
+  border:1.5px solid var(--border);
+  background:var(--glass);color:var(--muted2);
+  font-size:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .2s;flex-shrink:0;
+}
+.mic-ring:hover{border-color:rgba(239,68,68,0.5);color:#f87171;}
+.mic-ring.live{
+  border-color:rgba(239,68,68,0.6);color:#f87171;
+  background:rgba(239,68,68,0.08);
+  animation:micPulse 1s ease-in-out infinite;
+}
+@keyframes micPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.3)}
+  50%{box-shadow:0 0 0 7px rgba(239,68,68,0)}
+}
+.mic-status{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);}
+.mic-status.live{color:#f87171;}
+.char-pill{
+  margin-left:auto;
+  font-family:'Space Mono',monospace;font-size:10px;
+  color:var(--muted);letter-spacing:.5px;
+}
+
+/* ── Submit row ── */
+.submit-row{
+  display:flex;justify-content:flex-end;gap:10px;
+  margin-top:14px;
+  animation:fadeUp .7s .3s ease both;
+}
+
+/* ── Loading ── */
+#loadingBlock{
+  display:none;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r);padding:40px 30px;text-align:center;
+  margin-bottom:20px;
+}
+#loadingBlock.show{display:block;}
+.spinner-track{
+  width:48px;height:48px;margin:0 auto 20px;
+  border:2px solid var(--border);
+  border-top-color:var(--cyan);
+  border-radius:50%;
+  animation:spin .75s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-title{
+  font-family:'Space Mono',monospace;
+  font-size:13px;color:var(--cyan);letter-spacing:2px;margin-bottom:6px;
+}
+.loading-sub{font-size:12px;color:var(--muted2);}
+
+/* ── Result ── */
+#resultBlock{
+  display:none;
+  border-radius:var(--r);overflow:hidden;
+  border:1px solid var(--border);
+  box-shadow:0 8px 40px rgba(0,0,0,0.4);
+  animation:fadeUp .5s ease both;
+  transition:border-color 1.4s ease;
+}
+#resultBlock.show{display:block;}
+
+.result-header{
+  background:rgba(0,0,0,0.4);
+  padding:20px 26px;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);
+  transition:border-color 1.4s ease;
+}
+.result-title{
+  font-family:'Space Mono',monospace;
+  font-size:13px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--white);
+}
+.score-chip{
+  display:flex;align-items:center;gap:10px;
+}
+.score-ring-wrap{position:relative;width:56px;height:56px;}
+.score-ring-svg{width:100%;height:100%;transform:rotate(-90deg);}
+.ring-bg{fill:none;stroke:rgba(255,255,255,0.06);stroke-width:4;}
+.ring-val{
+  fill:none;stroke-width:4;stroke-linecap:round;
+  stroke-dasharray:157;stroke-dashoffset:157;
+  transition:stroke-dashoffset 1.4s cubic-bezier(.34,1.2,.64,1),stroke 1.4s ease;
+}
+.score-label-inner{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  font-family:'Space Mono',monospace;font-size:16px;font-weight:700;line-height:1;
+  color:var(--white);
+}
+.score-label-inner small{font-size:8px;color:var(--muted2);font-family:'Manrope',sans-serif;font-weight:400;}
+.score-meta{display:flex;flex-direction:column;gap:2px;}
+.score-grade{
+  font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.5px;
+}
+.score-verdict{font-size:11px;color:var(--muted2);}
+
+/* Result body */
+.result-body{
+  background:var(--surface2);padding:26px;
+  transition:background 1.4s ease;
+}
+#result{
+  font-family:'Manrope',sans-serif;font-size:14px;line-height:1.8;color:var(--text);
+}
+#result .res-heading{
+  font-family:'Space Mono',monospace;
+  font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--cyan);
+  margin:22px 0 8px;padding-bottom:6px;
+  border-bottom:1px solid rgba(34,211,238,0.15);
+  display:flex;align-items:center;gap:8px;
+}
+#result .res-heading::before{
+  content:'';width:3px;height:12px;
+  background:var(--cyan);border-radius:2px;display:inline-block;
+  transition:background 1.4s ease;
+}
+#result .res-heading:first-child{margin-top:0;}
+#result .res-list{list-style:none;padding:0;margin:0 0 12px;display:flex;flex-direction:column;gap:6px;}
+#result .res-list li{
+  padding:8px 12px 8px 32px;
+  position:relative;
+  background:rgba(255,255,255,0.02);
+  border-radius:6px;border:1px solid var(--border);
+  font-size:13.5px;line-height:1.65;
+}
+#result .res-list li::before{
+  content:'›';
+  position:absolute;left:12px;top:8px;
+  font-family:'Space Mono',monospace;font-size:14px;
+  color:var(--cyan);font-weight:700;
+  transition:color 1.4s ease;
+}
+#result .res-para{font-size:14px;line-height:1.75;margin:6px 0;color:#94a3b8;}
+
+.result-footer{
+  padding:14px 26px;
+  background:rgba(0,0,0,0.3);
+  border-top:1px solid var(--border);
+  display:flex;justify-content:flex-end;gap:10px;
+}
+
+/* ── Toast ── */
+.toast{
+  position:fixed;bottom:28px;right:28px;
+  padding:12px 20px;border-radius:10px;
+  font-size:13px;font-weight:600;
+  z-index:999;max-width:300px;
+  border:1px solid var(--border);
+  background:var(--surface);
+  transform:translateY(70px);opacity:0;
+  transition:all .35s cubic-bezier(.34,1.4,.64,1);
+  box-shadow:0 8px 32px rgba(0,0,0,0.5);
+  font-family:'Manrope',sans-serif;
+}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.err{border-color:rgba(239,68,68,0.4);color:#f87171;}
+.toast.ok{border-color:rgba(34,211,238,0.4);color:var(--cyan);}
+
+/* ── Animations ── */
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(20px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--muted);border-radius:4px;}
+</style>
+</head>
+<body>
+
+<div class="bg-mesh">
+  <div class="glow-orb a"></div>
+  <div class="glow-orb b"></div>
+  <div class="glow-orb score-glow" id="scoreGlow"></div>
+</div>
+<div class="scanlines"></div>
+
+<div class="shell">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-mark">Prep<span>AI</span></div>
+      <div class="logo-sub">Interview Coach</div>
+    </div>
+    <div class="status-chip" id="statusChip">
+      <div class="blink" id="statusDot"></div>
+      <span id="statusText">Ready</span>
+    </div>
+  </div>
+
+  <!-- Resume Upload -->
+<div class="q-section">
+  <div class="step-label" data-n="0">Resume</div>
+  <div class="q-card">
+
+    <input type="file" id="resumeFile" accept=".pdf" style="margin-bottom:15px;">
+
+    <div class="q-actions">
+      <button class="btn btn-cyan" onclick="uploadResume()">
+        Upload Resume
+      </button>
+
+      <button class="btn btn-ghost" onclick="getResumeQuestions()">
+        Generate Resume Questions
+      </button>
+    </div>
+
+  </div>
+</div>
+
+  <!-- Question -->
+  <div class="q-section">
+    <div class="step-label" data-n="1">Question</div>
+    <div class="q-card" id="qCard">
+      <div class="q-tag" id="qTag" style="display:none">[ Interview Question ]</div>
+      <div class="q-text placeholder" id="question">Press "New Question" to begin your session</div>
+      <div class="q-actions">
+        <button class="btn btn-cyan" id="getQBtn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          New Question
+        </button>
+        <button class="btn btn-ghost" onclick="resetAll()">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Answer -->
+  <div class="a-section">
+    <div class="step-label" data-n="2">Your Answer</div>
+    <div class="a-box">
+      <textarea id="answer" placeholder="Speak your answer using the mic, or type here…" oninput="updateCount()"></textarea>
+      <div class="a-toolbar">
+        <button class="mic-ring" id="micBtn" onclick="startRecording()" title="Voice input">🎤</button>
+        <span class="mic-status" id="micStatus">Click mic to speak</span>
+        <span class="char-pill" id="charCount">0 chars</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Submit -->
+  <div class="submit-row">
+    <button class="btn btn-ghost" onclick="document.getElementById('answer').value='';updateCount()">Clear</button>
+    <button class="btn btn-cyan" id="submitBtn" onclick="submitAnswer()">
+      Analyze Answer
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+
+  <!-- Loading -->
+  <div id="loadingBlock">
+    <div class="spinner-track"></div>
+    <div class="loading-title">Analyzing…</div>
+    <div class="loading-sub">Gemini AI is reviewing your response</div>
+  </div>
+
+  <!-- Result -->
+  <div id="resultBlock">
+    <div class="result-header">
+      <div class="result-title">Feedback Report</div>
+      <div class="score-chip">
+        <div class="score-ring-wrap">
+          <svg class="score-ring-svg" viewBox="0 0 56 56">
+            <circle class="ring-bg" cx="28" cy="28" r="25"/>
+            <circle class="ring-val" id="ringVal" cx="28" cy="28" r="25"/>
+          </svg>
+          <div class="score-label-inner">
+            <span id="scoreNum">–</span>
+            <small>/10</small>
+          </div>
+        </div>
+        <div class="score-meta" id="scoreMeta" style="display:none">
+          <div class="score-grade" id="scoreGrade">–</div>
+          <div class="score-verdict" id="scoreVerdict">–</div>
+        </div>
+      </div>
+    </div>
+    <div class="result-body">
+      <div id="result"></div>
+    </div>
+    <div class="result-footer">
+      <button class="btn btn-ghost" onclick="resetAll()">↩ Try Again</button>
+    </div>
+  </div>
+
+</div><!-- /shell -->
+
+<!-- Resume Upload -->
+<div class="q-section">
+  <div class="step-label" data-n="0">Resume</div>
+  <div class="q-card">
+    
+    <input type="file" id="resumeFile" accept=".pdf" style="margin-bottom:15px;">
+
+    <div class="q-actions">
+      <button class="btn btn-cyan" onclick="uploadResume()">
+        Upload Resume
+      </button>
+
+      <button class="btn btn-ghost" onclick="getResumeQuestions()">
+        Generate Resume Questions
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ─── GLOBAL STATE ─── */
+let resumeQuestions = [];
+let currentQuestionIndex = 0;
+
+/* ─── Default Questions ─── */
+const questions = [
+  "Tell me about yourself",
+  "What are your strengths?",
+  "Why should we hire you?",
+  "Describe a challenge you faced",
+  "Where do you see yourself in 5 years?",
+  "What is your greatest weakness?",
+  "Why do you want to work here?",
+  "Tell me about a time you showed leadership."
+];
+
+/* ─── RANDOM QUESTION ─── */
+document.getElementById("getQBtn").addEventListener("click", () => {
+  const q = questions[Math.floor(Math.random() * questions.length)];
+  showQuestion(q);
+});
+
+/* ─── SHOW QUESTION UI ─── */
+function showQuestion(q) {
+  const el = document.getElementById("question");
+  el.textContent = q;
+  el.classList.remove("placeholder");
+
+  document.getElementById("qCard").classList.add("loaded");
+  document.getElementById("qTag").style.display = "block";
+
+  document.getElementById("resultBlock").classList.remove("show");
+  document.getElementById("loadingBlock").classList.remove("show");
+
+  resetBg();
+}
+
+/* ─── RESUME UPLOAD ─── */
+async function uploadResume() {
+  const file = document.getElementById("resumeFile").files[0];
+
+  if (!file) {
+    toast("Please select a PDF file", true);
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("resume", file);
+
+  setStatus("analyzing");
+
+  try {
+    const res = await fetch("http://127.0.0.1:5000/upload_resume", {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await res.json();
+    setStatus("ready");
+
+    if (data.message) {
+      toast("✅ Resume uploaded successfully");
+
+      // reset previous questions
+      resumeQuestions = [];
+      currentQuestionIndex = 0;
+
+    } else {
+      toast(data.error, true);
+    }
+
+  } catch {
+    setStatus("ready");
+    toast("Upload failed", true);
+  }
+}
+
+/* ─── GENERATE RESUME QUESTIONS ─── */
+async function getResumeQuestions() {
+
+  // If already loaded → show next
+  if (resumeQuestions.length > 0) {
+    showNextResumeQuestion();
+    return;
+  }
+
+  setStatus("analyzing");
+
+  try {
+    const res = await fetch("http://127.0.0.1:5000/generate_questions");
+    const data = await res.json();
+
+    setStatus("ready");
+
+    if (data.questions) {
+      resumeQuestions = data.questions;
+      currentQuestionIndex = 0;
+
+      showNextResumeQuestion();
+      toast("Resume questions ready");
+
+    } else {
+      toast(data.error, true);
+    }
+
+  } catch {
+    setStatus("ready");
+    toast("Failed to generate questions", true);
+  }
+}
+
+/* ─── SHOW NEXT QUESTION ─── */
+function showNextResumeQuestion() {
+  if (currentQuestionIndex >= resumeQuestions.length) {
+    toast("All questions completed", true);
+    return;
+  }
+
+  showQuestion(resumeQuestions[currentQuestionIndex]);
+  currentQuestionIndex++;
+}
+
+/* ─── SUBMIT ANSWER ─── */
+async function submitAnswer() {
+  const question = document.getElementById("question").innerText;
+  const answer = document.getElementById("answer").value.trim();
+
+  if (!question || question.includes("Press"))
+    return toast("Get a question first", true);
+
+  if (!answer)
+    return toast("Write or speak an answer first", true);
+
+  document.getElementById("loadingBlock").classList.add("show");
+  document.getElementById("resultBlock").classList.remove("show");
+  document.getElementById("submitBtn").disabled = true;
+  setStatus("analyzing");
+
+  try {
+    const res = await fetch("http://127.0.0.1:5000/analyze", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ question, answer })
+    });
+
+    const data = await res.json();
+
+    document.getElementById("loadingBlock").classList.remove("show");
+    document.getElementById("submitBtn").disabled = false;
+    setStatus("ready");
+
+    const raw = data.result || data.error;
+    document.getElementById("result").innerHTML = raw;
+    document.getElementById("resultBlock").classList.add("show");
+
+  } catch {
+    document.getElementById("loadingBlock").classList.remove("show");
+    document.getElementById("submitBtn").disabled = false;
+    setStatus("ready");
+    toast("Backend error", true);
+  }
+}
+
+/* ─── RESET ─── */
+function resetAll() {
+  document.getElementById("answer").value = "";
+  updateCount();
+
+  const q = document.getElementById("question");
+  q.textContent = "Press \"New Question\" to begin your session";
+  q.classList.add("placeholder");
+
+  document.getElementById("qCard").classList.remove("loaded");
+  document.getElementById("qTag").style.display = "none";
+  document.getElementById("resultBlock").classList.remove("show");
+  document.getElementById("loadingBlock").classList.remove("show");
+
+  // reset resume state
+  resumeQuestions = [];
+  currentQuestionIndex = 0;
+
+  resetBg();
+}
+
+/* ─── HELPERS ─── */
+function updateCount() {
+  document.getElementById("charCount").textContent =
+    document.getElementById("answer").value.length + " chars";
+}
+
+function setStatus(state) {
+  const txt = document.getElementById("statusText");
+  txt.textContent = state === "analyzing" ? "Analyzing" :
+                    state === "recording" ? "Recording" : "Ready";
+}
+
+function toast(msg, err=false) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "toast show " + (err ? "err" : "ok");
+  setTimeout(() => t.classList.remove("show"), 3000);
+}
+
+function resetBg() {}
+</script>
+</body>
+</html>
